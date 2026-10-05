@@ -1,0 +1,3 @@
+interT8codeDyMFoam.C
+
+EXE = $(FOAM_APPBIN)/interT8codeDyMFoam

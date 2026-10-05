@@ -1,0 +1,24 @@
+# wmake build artifacts
+lnInclude/
+Make/linux*/
+*.dep
+*.o
+*.so
+compile_commands.json
+
+# OpenFOAM case outputs (any fork/version directory)
+*/cases/*/0/
+*/cases/*/[1-9]*/
+*/cases/*/0.[0-9]*/
+*/cases/*/constant/polyMesh/
+*/cases/*/processor*/
+*/cases/*/postProcessing/
+*/cases/*/VTK/
+*/cases/*/log.*
+*/cases/*/*.foam
+*/cases/*/*.png
+*/cases/*/*.mp4
+*/cases/*/*.avi
+
+# Python
+__pycache__/

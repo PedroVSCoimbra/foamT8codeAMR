@@ -1,0 +1,59 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | foam-extend: Open Source CFD                    |
+|  \\    /   O peration     | Version:     5.0                                |
+|   \\  /    A nd           | Web:         http://www.foam-extend.org         |
+|    \\/     M anipulation  | For copyright notice see file Copyright         |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      dynamicMeshDict;
+}
+
+dynamicFvMesh   dynamicT8codeFvMesh;
+
+dynamicT8codeFvMeshCoeffs
+{
+    // Campo usado como critério de refinamento (alpha1 = fração de água)
+    field           alpha1;
+
+    // Refinamento é avaliado a cada refineInterval passos de tempo
+    refineInterval  5;
+
+    // Célula é candidata a refino se alpha1 > lowerRefineLevel
+    lowerRefineLevel 0.001;
+
+    // Célula é candidata a refino se alpha1 < lowerRefineLevel
+    upperRefineLevel 0.999;
+
+    // If field value < unrefineLevel unrefine
+    unrefineLevel   10;
+
+    // Number of buffer-cell layers around refined cells.
+    nBufferLayers   1;
+
+    // Rebuild only the changed part of the mesh when possible.
+    incrementalRebuild false;
+
+    // Níveis máximos de refinamento (2 = Δx/4 em cada direção)
+    maxRefinement   2;
+
+    // Número máximo de células permitido na malha
+    // Deve ser maior que o tamanho da malha base (16000 células)
+    maxCells        200000;
+
+    // Corrige fluxos (phi) após refinamento para conservação de massa
+    correctFluxes
+    (
+        (phi U)
+    );
+
+    // Escreve cellLevel/pointLevel nos time directories (diagnóstico)
+    dumpLevel       true;
+}
+
+// ************************************************************************* //

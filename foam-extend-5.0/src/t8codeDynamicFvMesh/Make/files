@@ -1,0 +1,3 @@
+dynamicT8codeFvMesh.C
+
+LIB = $(FOAM_LIBBIN)/libt8codeDynamicFvMesh

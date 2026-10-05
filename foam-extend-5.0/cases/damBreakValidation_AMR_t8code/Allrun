@@ -1,0 +1,13 @@
+#!/bin/zsh
+cd ${0%/*} || exit 1
+
+. /home/pedro/foam/foam-extend-5.0/etc/zshrc
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+
+cp -r 0.orig 0
+
+runApplication blockMesh
+runApplication setFields
+runApplication interT8codeDyMFoam
+
+# ----------------------------------------------------------------- end-of-file

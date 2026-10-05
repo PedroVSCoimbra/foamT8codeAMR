@@ -1,0 +1,32 @@
+T8CODE_DIR ?= $(HOME)/t8code
+
+EXE_INC = \
+    -I$(FOAM_SOLVERS)/multiphase/interFoam \
+    -I$(LIB_SRC)/transportModels \
+    -I$(LIB_SRC)/transportModels/incompressible/lnInclude \
+    -I$(LIB_SRC)/transportModels/interfaceProperties/lnInclude \
+    -I$(LIB_SRC)/turbulenceModels/incompressible/turbulenceModel \
+    -I$(LIB_SRC)/finiteVolume/lnInclude \
+    -I$(LIB_SRC)/dynamicMesh/dynamicMesh/lnInclude \
+    -I$(LIB_SRC)/meshTools/lnInclude \
+    -I$(LIB_SRC)/dynamicMesh/dynamicFvMesh/lnInclude
+
+EXE_LIBS = \
+    -linterfaceProperties \
+    -lincompressibleTransportModels \
+    -lincompressibleTurbulenceModel \
+    -lincompressibleRASModels \
+    -lincompressibleLESModels \
+    -lfiniteVolume \
+    -ldynamicMesh \
+    -lmeshTools \
+    -ldynamicFvMesh \
+    -lt8codeDynamicFvMesh \
+    -ltopoChangerFvMesh \
+    -llduSolvers \
+    -L$(MESQUITE_LIB_DIR) -lmesquite \
+    -Wl,--allow-shlib-undefined \
+    -Wl,--disable-new-dtags \
+    -Wl,-rpath,$(T8CODE_DIR)/build/src \
+    -Wl,-rpath,$(T8CODE_DIR)/build/_deps/sc-build \
+    -Wl,-rpath,$(T8CODE_DIR)/build/_deps/p4est-build
