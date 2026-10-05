@@ -168,6 +168,10 @@ class dynamicT8codeFvMesh
         //- t8 -> OF : write the interpolated per-element fields back
         void copyFieldsFromForest();
 
+        //- Body of update() (forest init, adapt and OF rebuild), without
+        //  the once-per-time-step guard and the AMRmeshUpdate log line
+        bool updateTopology();
+
         //- Recompute the listed fluxes from the mapped velocity, but only
         //  on faces without an old master. Faces with a valid master keep
         //  the mapped (MULES-limited) flux, exactly like

@@ -2193,6 +2193,32 @@ bool dynamicT8codeFvMesh::update()
     }
     curTimeIndex_ = time().timeIndex();
 
+    // Cost of the whole mesh update, logged every time step (including
+    // steps without adaptation) so that it can be compared with the native
+    // dynamicRefineFvMesh. Same line format as the timing that used to live
+    // in the solver: "AMRmeshUpdate: CPU <s> s  Clock <s> s  changed <0|1>"
+    const scalar cpuStart = time().elapsedCpuTime();
+    const auto clockStart = std::chrono::steady_clock::now();
+
+    const bool meshChanged = updateTopology();
+
+    bool anyChanged = meshChanged;
+    reduce(anyChanged, orOp<bool>());
+
+    Info<< "AMRmeshUpdate: CPU " << time().elapsedCpuTime() - cpuStart
+        << " s  Clock "
+        << std::chrono::duration<double>
+           (
+               std::chrono::steady_clock::now() - clockStart
+           ).count()
+        << " s  changed " << anyChanged << endl;
+
+    return meshChanged;
+}
+
+
+bool dynamicT8codeFvMesh::updateTopology()
+{
     if (!forestInitialized_)
     {
         initForest();

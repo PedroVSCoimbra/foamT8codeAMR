@@ -22,13 +22,17 @@ License
     along with foam-extend.  If not, see <http://www.gnu.org/licenses/>.
 
 Application
-    interDyMFoam
+    interT8codeDyMFoam
 
 Description
     Solver for 2 incompressible, isothermal immiscible fluids using a VOF
     (volume of fluid) phase-fraction based interface capturing approach,
     with optional mesh motion and mesh topology changes including adaptive
     re-meshing.
+
+    Verbatim copy of interDyMFoam.C; the remaining solver headers are taken
+    from $FOAM_SOLVERS/multiphase/interDyMFoam. The separate executable only
+    links libt8codeDynamicFvMesh, so the original solver stays untouched.
 
 \*---------------------------------------------------------------------------*/
 
@@ -77,15 +81,8 @@ int main(int argc, char *argv[])
 
         Info<< "Time = " << runTime.timeName() << nl << endl;
 
-        scalar cpuStart = runTime.elapsedCpuTime();
-        scalar clockStart = runTime.elapsedClockTime();
         bool meshChanged = mesh.update();
         reduce(meshChanged, orOp<bool>());
-        scalar cpuEnd = runTime.elapsedCpuTime();
-        scalar clockEnd = runTime.elapsedClockTime();
-        Info<< "AMRmeshUpdate: CPU " << (cpuEnd-cpuStart) << " s"
-            << "  Clock " << (clockEnd-clockStart) << " s"
-            << "  changed " << meshChanged << endl;
 
 #       include "volContinuity.H"
 

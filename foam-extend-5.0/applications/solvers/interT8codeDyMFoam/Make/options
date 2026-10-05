@@ -1,6 +1,7 @@
 T8CODE_DIR ?= $(HOME)/t8code
 
 EXE_INC = \
+    -I$(FOAM_SOLVERS)/multiphase/interDyMFoam \
     -I$(FOAM_SOLVERS)/multiphase/interFoam \
     -I$(LIB_SRC)/transportModels \
     -I$(LIB_SRC)/transportModels/incompressible/lnInclude \

@@ -1,6 +1,6 @@
 # wmake build artifacts
 lnInclude/
-Make/linux*/
+**/Make/linux*/
 *.dep
 *.o
 *.so
