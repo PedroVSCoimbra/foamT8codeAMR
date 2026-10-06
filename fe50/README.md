@@ -2,8 +2,8 @@
 
 Adaptive mesh refinement (AMR) for
 [foam-extend-5.0](https://sourceforge.net/projects/foam-extend/) using
-[t8code](https://github.com/DLR-AMR/t8code) as the refinement backend,
-replacing the native `hexRef8` engine.
+[t8code](https://github.com/DLR-AMR/t8code) (spoken as "tetcode") as the
+refinement backend, replacing the native `hexRef8` engine.
 
 The AMR is a run-time selectable `dynamicFvMesh` in a shared library: it
 works with the standard solvers (e.g. `interDyMFoam`), with no custom

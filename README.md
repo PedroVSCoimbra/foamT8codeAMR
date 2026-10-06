@@ -1,10 +1,10 @@
 # foamT8codeAMR
 
 Adaptive mesh refinement (AMR) for OpenFOAM-family codes using
-[t8code](https://github.com/DLR-AMR/t8code) as the refinement backend.
-The AMR is a run-time selectable `dynamicFvMesh` library, loaded through
-`libs` in `system/controlDict` and used with the standard dynamic-mesh
-solvers.
+[t8code](https://github.com/DLR-AMR/t8code) (spoken as "tetcode") as the
+refinement backend. The AMR is a run-time selectable `dynamicFvMesh`
+library, loaded through `libs` in `system/controlDict` and used with the
+standard dynamic-mesh solvers.
 
 ## Directory organization
 
