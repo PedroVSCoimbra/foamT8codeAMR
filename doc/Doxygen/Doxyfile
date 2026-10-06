@@ -1,0 +1,70 @@
+# Doxygen configuration for foamT8codeAMR.
+# Only non-default settings are listed. Run ./Allwmake from this directory;
+# the HTML goes to html/index.html.
+
+PROJECT_NAME           = foamT8codeAMR
+PROJECT_NUMBER         = $(PROJECT_NUMBER)
+PROJECT_BRIEF          = "t8code-based adaptive mesh refinement for OpenFOAM-family codes"
+OUTPUT_DIRECTORY       = .
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+
+# ---- Input -------------------------------------------------------------------
+INPUT                  = ../../README.md \
+                         ../../fe50 \
+                         ../../doc
+EXCLUDE                = ../../doc/Doxygen
+EXCLUDE_PATTERNS       = */lnInclude/* \
+                         */Make/*
+FILE_PATTERNS          = *.H \
+                         *.C \
+                         *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = ../../README.md
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = ../..
+
+# OpenFOAM sources: .C/.H are C++, and the banner and //- comments are
+# converted to Doxygen by doxyFilt.py (source browsing shows the original)
+EXTENSION_MAPPING      = C=C++ \
+                         H=C++
+FILTER_PATTERNS        = *.H=./doxyFilt.py \
+                         *.C=./doxyFilt.py
+FILTER_SOURCE_FILES    = NO
+
+# ---- Extraction --------------------------------------------------------------
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_ANON_NSPACES   = YES
+SOURCE_BROWSER         = YES
+STRIP_CODE_COMMENTS    = NO
+SORT_MEMBER_DOCS       = NO
+# A multi-line //- comment is the brief description, as in OpenFOAM
+MULTILINE_CPP_IS_BRIEF = YES
+
+# OpenFOAM macros that would otherwise confuse the parser
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+SEARCH_INCLUDES        = NO
+PREDEFINED             = "TypeName(arg)=static const char* typeName;" \
+                         "defineTypeNameAndDebug(a,b)=" \
+                         "addToRunTimeSelectionTable(a,b,c)=" \
+                         "forAll(list,i)=for(int i=0;;)" \
+                         "forAllIter(a,b,c)=for(;;)"
+
+# ---- Output ------------------------------------------------------------------
+GENERATE_TREEVIEW      = YES
+HAVE_DOT               = YES
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = NO
+INCLUDED_BY_GRAPH      = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+
+# ---- Messages ----------------------------------------------------------------
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_LOGFILE           = doxygen.log

@@ -4,13 +4,13 @@ cd ${0%/*} || exit 1
 . /home/pedro/foam/foam-extend-5.0/etc/bashrc
 . $WM_PROJECT_DIR/bin/tools/RunFunctions
 
-# interT8codeDyMFoam links libt8codeDynamicFvMesh, whose RPATH already locates
-# libt8/libsc/libp4est -- no LD_LIBRARY_PATH changes are needed.
+# libt8codeDynamicFvMesh is loaded through "libs" in system/controlDict; its
+# RPATH already locates libt8/libsc/libp4est (no LD_LIBRARY_PATH changes).
 
 cp -r 0.orig 0
 
 runApplication blockMesh
 runApplication setFields
-runApplication interT8codeDyMFoam
+runApplication interDyMFoam
 
 # ----------------------------------------------------------------- end-of-file

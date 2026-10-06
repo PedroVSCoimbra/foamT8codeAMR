@@ -7,18 +7,22 @@ lnInclude/
 compile_commands.json
 
 # OpenFOAM case outputs (any fork/version directory)
-*/cases/*/0/
-*/cases/*/[1-9]*/
-*/cases/*/0.[0-9]*/
-*/cases/*/constant/polyMesh/
-*/cases/*/processor*/
-*/cases/*/postProcessing/
-*/cases/*/VTK/
-*/cases/*/log.*
-*/cases/*/*.foam
-*/cases/*/*.png
-*/cases/*/*.mp4
-*/cases/*/*.avi
+*/tutorials/*/0/
+*/tutorials/*/[1-9]*/
+*/tutorials/*/0.[0-9]*/
+*/tutorials/*/constant/polyMesh/
+*/tutorials/*/processor*/
+*/tutorials/*/postProcessing/
+*/tutorials/*/VTK/
+*/tutorials/*/log.*
+*/tutorials/*/*.foam
+*/tutorials/*/*.png
+*/tutorials/*/*.mp4
+*/tutorials/*/*.avi
 
 # Python
 __pycache__/
+
+# Doxygen output
+doc/Doxygen/html/
+doc/Doxygen/doxygen.log

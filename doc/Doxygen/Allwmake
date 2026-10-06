@@ -1,0 +1,23 @@
+#!/bin/sh
+cd ${0%/*} || exit 1    # run from this directory
+
+# Builds the HTML documentation in html/ (open html/index.html).
+# Requires doxygen, python3 and, for the class graphs, graphviz (dot).
+for tool in doxygen python3
+do
+    command -v $tool > /dev/null || { echo "$tool not found" 1>&2; exit 1; }
+done
+
+PROJECT_NUMBER=$(git describe --tags --always --dirty 2>/dev/null)
+export PROJECT_NUMBER
+
+rm -rf html doxygen.log
+doxygen Doxyfile || exit 1
+
+echo "Documentation: $PWD/html/index.html"
+if [ -s doxygen.log ]
+then
+    echo "Warnings: $(wc -l < doxygen.log) lines in $PWD/doxygen.log"
+fi
+
+# ----------------------------------------------------------------- end-of-file

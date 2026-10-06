@@ -1,7 +1,7 @@
 # risingDrop3D_ellipsoidal
 
 3D buoyancy-driven rising drop, test case 1 (ellipsoidal regime), run with
-`interT8codeDyMFoam` and t8code AMR. The bubble centre of mass and rise
+`interDyMFoam` and t8code AMR. The bubble centre of mass and rise
 velocity are compared with the solvers reported by Silva et al. (2023).
 
 ## Setup
@@ -26,7 +26,7 @@ are dimensionless, as in the benchmark. In foam-extend, `nu` is set to
 ## Running
 
 ```bash
-./Allrun              # blockMesh, setFields, interT8codeDyMFoam
+./Allrun              # blockMesh, setFields, interDyMFoam
 python3 postprocess.py
 ./Allclean
 ```

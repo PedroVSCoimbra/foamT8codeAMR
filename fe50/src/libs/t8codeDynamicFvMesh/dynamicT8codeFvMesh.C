@@ -36,6 +36,8 @@ License
 #include <array>
 #include <chrono>
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 
 // t8code headers (kept out of the .H to avoid leaking C++17/MPI types)
 #include <t8.h>
@@ -1631,18 +1633,28 @@ bool dynamicT8codeFvMesh::forestToOpenFOAM()
 }
 
 
-// Re-derive leafToCell_ (forest leaf -> OF cell) by locating each t8 leaf
-// centroid in the rebuilt OF mesh. A quantised-centroid hash is not used
-// here: coordinates that agree to 1e-16 can still round into different bins
-// and silently scramble every mapped field on the next adapt.
+// Re-derive leafToCell_ (forest leaf -> OF cell) WITHOUT a geometric search.
+// The rebuilt OF mesh covers exactly the forest leaves (same partition, same
+// cells), so sorting both the leaf centroids and the OF cell centres in the
+// same order pairs each leaf with its cell in O(N log N). A quantised-centroid
+// hash is not used here: coordinates that agree to 1e-16 can still round into
+// different bins and silently scramble every mapped field on the next adapt;
+// sorting has no bins and is immune to that. Every pair is verified by
+// distance (a mismatch would be ~one cell size away, >> tolerance); anything
+// unverified falls back to the exact findCell search, so the map is never
+// worse than the old full-search version (which this replaces: N octree
+// walks, ~30 s at 130k cells, 95% of the mesh.update cost).
 void dynamicT8codeFvMesh::rebuildLeafToCell()
 {
     t8_forest_t forest = FOREST;
     const t8_locidx_t nTrees = t8_forest_get_num_local_trees(forest);
     const t8_locidx_t nLeaf  = t8_forest_get_local_num_leaf_elements(forest);
     const labelList off = computeTreeOffsets(forest);
+    const scalar zMid = 0.5*(zMin_ + zMax_);
 
-    leafToCell_.assign(nLeaf, -1);
+    // Leaf centroids (t8 parametric space == OF physical space: the OF mesh
+    // is rebuilt from these same leaves).
+    std::vector<point> leafC(nLeaf);
     for (t8_locidx_t t = 0; t < nTrees; ++t)
     {
         const t8_locidx_t nE = t8_forest_get_tree_num_leaf_elements(forest, t);
@@ -1652,17 +1664,115 @@ void dynamicT8codeFvMesh::rebuildLeafToCell()
                 t8_forest_get_leaf_element_in_tree(forest, t, e);
             double xyz[3];
             t8_forest_element_centroid(forest, t, el, xyz);
-            const point c
+            leafC[off[t] + e] = point
             (
                 xyz[0], xyz[1],
-                planar2D_ ? 0.5*(zMin_ + zMax_) : xyz[2]
+                planar2D_ ? zMid : xyz[2]
             );
-            const label cellI = this->findCell(c);
-            if (cellI >= 0 && cellI < nCells())
+        }
+    }
+
+    const vectorField& cc = this->C().internalField();
+
+    std::vector<label> leafOrd(nLeaf), cellOrd(nCells());
+    for (label i = 0; i < nLeaf; ++i) leafOrd[i] = i;
+    for (label i = 0; i < nCells(); ++i) cellOrd[i] = i;
+    // Grid-aware ordering: t8 centroids and OF cell centres agree to ~1e-15
+    // but NOT bit-identically (different arithmetic paths), so an exact
+    // float comparison orders by last-ulp noise instead of grid position.
+    // Quantising to 1e-7 (8 orders above the noise, 5 below the finest cell
+    // size at maxRefinement_=2) restores grid ordering. Residual bin flips
+    // pair cells ~one cell size apart and are caught by the distance check
+    // below, which falls back to findCell for those leaves.
+    const double snapTol = 1e-7;
+    auto lessP = [&](const point& a, const point& b)
+    {
+        const long long ax = std::llround(a.x()/snapTol);
+        const long long bx = std::llround(b.x()/snapTol);
+        if (ax != bx) return ax < bx;
+        const long long ay = std::llround(a.y()/snapTol);
+        const long long by = std::llround(b.y()/snapTol);
+        if (ay != by) return ay < by;
+        const long long az = std::llround(a.z()/snapTol);
+        const long long bz = std::llround(b.z()/snapTol);
+        if (az != bz) return az < bz;
+        return false;
+    };
+    std::sort
+    (
+        leafOrd.begin(), leafOrd.end(),
+        [&](label a, label b){ return lessP(leafC[a], leafC[b]); }
+    );
+    std::sort
+    (
+        cellOrd.begin(), cellOrd.end(),
+        [&](label a, label b){ return lessP(cc[a], cc[b]); }
+    );
+
+    // A genuine mismatch lands ~one cell size away (mm here); anything below
+    // the tolerance is the same cell computed through different arithmetic.
+    const scalar matchTol = 1e-6;
+    leafToCell_.assign(nLeaf, -1);
+    scalar maxD = 0;
+    label nBad = 0;
+    if (label(leafOrd.size()) == nCells())
+    {
+        for (label k = 0; k < nLeaf; ++k)
+        {
+            const label leaf = leafOrd[k];
+            const label cell = cellOrd[k];
+            const scalar d = mag(leafC[leaf] - cc[cell]);
+            if (d > maxD) maxD = d;
+            if (d < matchTol)
             {
-                leafToCell_[off[t] + e] = cellI;
+                leafToCell_[leaf] = cell;
+            }
+            else
+            {
+                ++nBad;
             }
         }
+    }
+    else
+    {
+        nBad = nLeaf;
+    }
+
+    if (nBad > 0)
+    {
+        WarningInFunction
+            << "sort-match missed " << nBad << "/" << label(nLeaf)
+            << " leaves (maxD=" << maxD
+            << "), falling back to findCell for those" << endl;
+        for (label leaf = 0; leaf < nLeaf; ++leaf)
+        {
+            if (leafToCell_[leaf] >= 0) continue;
+            const label cellI = this->findCell(leafC[leaf]);
+            if (cellI >= 0 && cellI < nCells())
+            {
+                leafToCell_[leaf] = cellI;
+            }
+        }
+    }
+
+    // Validation hook (testing only): T8CHECK_MAP=1 re-runs the old full
+    // findCell loop and reports any difference vs the sort-match map.
+    if (getenv("T8CHECK_MAP"))
+    {
+        label nDiff = 0;
+        for (t8_locidx_t t = 0; t < nTrees; ++t)
+        {
+            const t8_locidx_t nE =
+                t8_forest_get_tree_num_leaf_elements(forest, t);
+            for (t8_locidx_t e = 0; e < nE; ++e)
+            {
+                const label leaf = off[t] + e;
+                const label cellI = this->findCell(leafC[leaf]);
+                if (cellI != leafToCell_[leaf]) ++nDiff;
+            }
+        }
+        Info<< "rebuildLeafToCell CHECK: " << nDiff << " diffs / "
+            << label(nLeaf) << " leaves, maxD=" << maxD << endl;
     }
 }
 

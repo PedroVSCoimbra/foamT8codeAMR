@@ -1,6 +1,6 @@
 # damBreak2D
 
-2D dam break in a closed tank, run with `interT8codeDyMFoam` and t8code
+2D dam break in a closed tank, run with `interDyMFoam` and t8code
 AMR. The free-surface height at two gauges is compared with the data
 reported by Zhainakov & Kurbanaliev (2013).
 
@@ -25,7 +25,7 @@ paper. The paper's pressure probe P on the right wall is not used here.
 ## Running
 
 ```bash
-./Allrun              # blockMesh, setFields, interT8codeDyMFoam
+./Allrun              # blockMesh, setFields, interDyMFoam
 python3 postprocess.py
 ./Allclean
 ```

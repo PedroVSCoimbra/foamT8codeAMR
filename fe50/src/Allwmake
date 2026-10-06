@@ -3,7 +3,6 @@ cd ${0%/*} || exit 1
 
 # Requires a sourced foam-extend-5.0 environment and a t8code build.
 # Override the t8code location with: T8CODE_DIR=/path/to/t8code ./Allwmake
-wmake libso src/t8codeDynamicFvMesh
-wmake applications/solvers/interT8codeDyMFoam
+wmake libso libs/t8codeDynamicFvMesh
 
 # ----------------------------------------------------------------- end-of-file
