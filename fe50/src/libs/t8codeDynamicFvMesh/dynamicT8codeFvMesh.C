@@ -81,10 +81,12 @@ namespace
 struct AdaptCtx
 {
     const double* alpha1;          // per OLD-element alpha1
-    const double* refineFlag;      // per base-cell: >0.5 => refine (band+buffer)
+    const double* refineFlag;      // per leaf: >0.5 => interface band (refine)
+    const double* protectFlag;     // per leaf: >0.5 => band + buffer (keep)
     const Foam::label* treeOffset; // global leaf offset of each tree (old forest)
     double lower;
     double upper;
+    double unrefine;               // unrefineLevel (native semantics)
     int maxLevel;
 };
 
@@ -108,40 +110,38 @@ int t8AdaptCallback
     const int level = t8_element_get_level(scheme, treeClass, elements[0]);
     const Foam::label gid = ctx->treeOffset[whichTree] + lelementId;
 
-    // Per-leaf refine flag (refineFlag is indexed by global leaf == OF cell;
-    // it already includes the interface band + nBufferLayers dilation). One
-    // level of refinement per adapt call (recursive = 0); deeper levels build
-    // up over successive refineIntervals, as in dynamicRefineFvMesh.
+    // Per-leaf flags (indexed by global leaf == OF cell). As in
+    // dynamicRefineFvMesh, only the interface band is refined (refineFlag);
+    // the buffer layers around it are only protected from coarsening
+    // (protectFlag). One level of refinement per adapt call (recursive = 0);
+    // deeper levels build up over successive refineIntervals.
     const bool flagged = ctx->refineFlag && ctx->refineFlag[gid] > 0.5;
 
-    // Coarsen a full family only if ALL siblings are clearly on the SAME side
-    // of the interface (all gas, or all liquid). A family that straddles the
-    // interface must NOT be coarsened: doing so destroys the interface and the
-    // (injected) coarse value is wildly wrong -> blows up interFoam's
-    // interface compression.
+    // Coarsening follows dynamicRefineFvMesh: a family is coarsened when no
+    // sibling is protected (interface band + buffer layers, protectFlag) and
+    // the smallest sibling value is below unrefineLevel (the native test on
+    // minCellField at the split point). With unrefineLevel above the field
+    // range (e.g. 10 for alpha1) both phases are coarsened away from the
+    // band, so only the band and its buffer stay refined. A family that
+    // straddles the interface always has a flagged sibling and is kept.
     if (isFamily && numElements > 1)
     {
-        bool allLow = true;   // every sibling below the lower threshold (gas)
-        bool allHigh = true;  // every sibling above the upper threshold (liquid)
+        double minA = ctx->alpha1[gid];
         bool anyFlagged = false;
+        bool anyProtected = false;
         for (int i = 0; i < numElements; ++i)
         {
-            const double a = ctx->alpha1[gid + i];
-            if (a >= ctx->lower) allLow = false;
-            if (a <= ctx->upper) allHigh = false;
+            minA = std::min(minA, ctx->alpha1[gid + i]);
             if (ctx->refineFlag && ctx->refineFlag[gid + i] > 0.5)
             {
                 anyFlagged = true;
             }
+            if (ctx->protectFlag && ctx->protectFlag[gid + i] > 0.5)
+            {
+                anyProtected = true;
+            }
         }
-        // Keep every family in the interface band and its buffer at its
-        // current level. Coarsening it creates mixed levels along the
-        // rectangular interface, especially where it reaches a wall.
-        // Coarsen gas-only families; the liquid wake stays refined.
-        // Coarsening pure-liquid families leaves impact zones under-
-        // resolved and ejects numerical spray (dam-break wall run-up);
-        // the native dynamicRefineFvMesh likewise preserves the wake.
-        if (!anyFlagged && allLow && level > 0)
+        if (!anyProtected && minA < ctx->unrefine && level > 0)
         {
             return -1;
         }
@@ -309,8 +309,10 @@ dynamicT8codeFvMesh::dynamicT8codeFvMesh(const IOobject& io)
     maxRefinement_(2),
     maxCells_(1000000),
     nBufferLayers_(1),
+    bufferDistance_(0),
     correctFluxes_(),
     refineFlag_(),
+    protectFlag_(),
     masterCell_(),
     incrementalRebuild_(false),
     leafToCell_(),
@@ -399,6 +401,7 @@ void dynamicT8codeFvMesh::readDict()
     maxRefinement_    = readLabel(coeffs.lookup("maxRefinement"));
     maxCells_         = readLabel(coeffs.lookup("maxCells"));
     nBufferLayers_    = coeffs.lookupOrDefault<label>("nBufferLayers", 1);
+    bufferDistance_   = coeffs.lookupOrDefault<scalar>("bufferDistance", 0);
     incrementalRebuild_ =
         coeffs.lookupOrDefault<bool>("incrementalRebuild", false);
     correctFluxes_    = List<Pair<word>>(coeffs.lookup("correctFluxes"));
@@ -648,8 +651,8 @@ bool dynamicT8codeFvMesh::runT8codeAdapt()
     const t8_locidx_t nOld =
         t8_forest_get_local_num_leaf_elements(forestOld);
 
-    // ---- refine flag: interface band dilated by nBufferLayers ---------------
-    // (the "safety margin": distance ~ nBufferLayers x cell size). Computed in
+    // ---- refine flag (interface band) and protect flag (band dilated by
+    // nBufferLayers cell layers and/or by bufferDistance). Computed in
     // OF-CELL space (band on the OF field, dilation over OF faces), then mapped
     // to per-LEAF (what the adapt callback indexes) via leafToCell_. After an
     // incremental rebuild OF cell index != forest leaf index, so the map is
@@ -724,6 +727,10 @@ bool dynamicT8codeFvMesh::runT8codeAdapt()
                 cellFlag[fOwn[faceI]] = 1.0;
         }
 
+        // Cells to refine: the band only (dynamicRefineFvMesh refines the
+        // candidates and uses the buffer layers for protection only)
+        const std::vector<double> bandFlag = cellFlag;
+
         const labelUList& fNei = faceNeighbour();
         for (label L = 0; L < nBufferLayers_; ++L)
         {
@@ -736,21 +743,79 @@ bool dynamicT8codeFvMesh::runT8codeAdapt()
             cellFlag.swap(nf);
         }
 
+        // Distance buffer: protect every cell whose centre lies within
+        // bufferDistance of a band cell centre. A front sweeps over the face
+        // neighbours carrying the nearest band cell found so far, so the cost
+        // is O(nFaces) per cell layer reached.
+        if (bufferDistance_ > 0)
+        {
+            const vectorField& cc = cellCentres();
+            const scalar d2 = sqr(bufferDistance_);
+            std::vector<label> nearest(nc, -1);
+            for (label c = 0; c < nc; ++c)
+            {
+                if (bandFlag[c] > 0.5) nearest[c] = c;
+            }
+
+            auto reach = [&](const label from, const label to)
+            {
+                const label seed = nearest[from];
+                if (seed < 0) return false;
+                const scalar dd = magSqr(cc[to] - cc[seed]);
+                if
+                (
+                    dd <= d2
+                 && (
+                        nearest[to] < 0
+                     || dd < magSqr(cc[to] - cc[nearest[to]])
+                    )
+                )
+                {
+                    nearest[to] = seed;
+                    return true;
+                }
+                return false;
+            };
+
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                forAll(fNei, f)
+                {
+                    if (reach(fOwn[f], fNei[f])) changed = true;
+                    if (reach(fNei[f], fOwn[f])) changed = true;
+                }
+            }
+
+            for (label c = 0; c < nc; ++c)
+            {
+                if (nearest[c] >= 0) cellFlag[c] = 1.0;
+            }
+        }
+
         refineFlag_.assign(nOld, 0.0);
+        protectFlag_.assign(nOld, 0.0);
         const bool useMap = (label(leafToCell_.size()) == nOld);
         for (label leaf = 0; leaf < nOld; ++leaf)
         {
             const label c = useMap ? leafToCell_[leaf] : leaf;
-            if (c >= 0 && c < nc) refineFlag_[leaf] = cellFlag[c];
+            if (c >= 0 && c < nc)
+            {
+                refineFlag_[leaf] = bandFlag[c];
+                protectFlag_[leaf] = cellFlag[c];
+            }
         }
     }
 
     AdaptCtx ctx;
     ctx.alpha1     = alpha1Data_.data();
     ctx.refineFlag = refineFlag_.data();
+    ctx.protectFlag = protectFlag_.data();
     ctx.treeOffset = oldTreeOffset.begin();
     ctx.lower      = lowerRefineLevel_;
     ctx.upper      = upperRefineLevel_;
+    ctx.unrefine   = unrefineLevel_;
     ctx.maxLevel   = int(maxRefinement_);
 
     // Keep the old forest alive: t8_forest_new_adapt consumes one reference of

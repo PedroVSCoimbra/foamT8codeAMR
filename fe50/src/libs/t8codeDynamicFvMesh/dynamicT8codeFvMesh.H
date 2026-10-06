@@ -35,10 +35,14 @@ Description
 
     1. Cells are flagged where the point-interpolated refinement field lies in
        [lowerRefineLevel, upperRefineLevel), as in dynamicRefineFvMesh, and
-       the band is dilated by nBufferLayers cell layers.
-    2. t8code refines the flagged cells by one level, up to maxRefinement,
-       and coarsens the families whose members all lie below
-       lowerRefineLevel (the liquid side and the interface band are kept).
+       the band is protected from coarsening together with nBufferLayers
+       cell layers around it and, optionally, every cell whose centre lies
+       within bufferDistance of a band cell. Only the band itself is
+       refined.
+    2. t8code refines the band cells by one level, up to maxRefinement, and
+       coarsens the families with no protected member whose smallest value
+       is below unrefineLevel (the native rule; unrefineLevel above the
+       field range, e.g. 10 for alpha1, coarsens both phases).
     3. alpha1, U and pd are interpolated in t8code callbacks. The polyMesh is
        rebuilt through directTopoChange, either from scratch or, with
        incrementalRebuild, only where t8code changed the forest. The
@@ -58,8 +62,8 @@ Description
     adapt call; user_data is cleared before any t8_forest_unref.
 
     Limitations: serial runs only; the interpolated fields are fixed to the
-    VOF set (the refinement field, U and pd); unrefineLevel and maxCells are
-    required for compatibility with dynamicRefineFvMesh but not used yet.
+    VOF set (the refinement field, U and pd); maxCells is required for
+    compatibility with dynamicRefineFvMesh but not used yet.
 
 Usage
     Load the library in system/controlDict:
@@ -80,10 +84,11 @@ Usage
         refineInterval      5;          // adapt every N steps (<= 0: never)
         lowerRefineLevel    0.001;      // refine where field is in
         upperRefineLevel    0.999;      //   [lower, upper)
-        unrefineLevel       10;         // required, not used yet
+        unrefineLevel       10;         // coarsen where min field < this
         maxRefinement       2;          // maximum refinement level
         maxCells            2000000;    // required, not used yet
         nBufferLayers       1;          // optional (default 1)
+        bufferDistance      0;          // optional (default 0: off)
         incrementalRebuild  true;       // optional (default false)
         correctFluxes       ((phi U));  // fluxes recomputed after mapping
     }
@@ -157,7 +162,8 @@ class dynamicT8codeFvMesh
             //- Upper bound of the refinement band
             scalar upperRefineLevel_;
 
-            //- Read for compatibility with dynamicRefineFvMesh; not used
+            //- A family is coarsened only if its smallest value is below
+            //  this level (dynamicRefineFvMesh semantics)
             scalar unrefineLevel_;
 
             //- Maximum refinement level of a base cell
@@ -166,17 +172,26 @@ class dynamicT8codeFvMesh
             //- Read for compatibility with dynamicRefineFvMesh; not used
             label maxCells_;
 
-        //- Number of cell layers around the interface band that are also
-        //  refined (the refinement "safety margin"; distance ~ nBufferLayers x
-        //  base-cell size). Read from dynamicT8codeFvMeshCoeffs::nBufferLayers.
+        //- Number of cell layers around the interface band protected from
+        //  coarsening (as in dynamicRefineFvMesh). Read from
+        //  dynamicT8codeFvMeshCoeffs::nBufferLayers (default 1).
         label nBufferLayers_;
+
+        //- Cells whose centre lies within this distance of a band cell
+        //  centre are also protected from coarsening (0: off). Read from
+        //  dynamicT8codeFvMeshCoeffs::bufferDistance (default 0).
+        scalar bufferDistance_;
 
         //- Fluxes recomputed after mapping, as (flux velocity) pairs
         List<Pair<word>> correctFluxes_;
 
-        //- Per base-cell refine flag (interface band dilated by nBufferLayers_);
-        //  lifetime spans the adapt call that reads it
+        //- Per-leaf refine flag (interface band only); lifetime spans the
+        //  adapt call that reads it
         std::vector<double> refineFlag_;
+
+        //- Per-leaf protect flag (interface band dilated by nBufferLayers_):
+        //  these cells are not coarsened, as in dynamicRefineFvMesh
+        std::vector<double> protectFlag_;
 
         //- Per NEW-cell -> OLD-cell map, built from the t8 parent<->child
         //  relationship (t8_forest_iterate_replace). Used as the directTopoChange
